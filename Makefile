@@ -74,8 +74,15 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
+# Original xv6 flags (for reference):
 #CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
-CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -fvar-tracking -fvar-tracking-assignments -O0 -g -Wall -MD -gdwarf-2 -m32 -Werror -fno-omit-frame-pointer -Wno-infinite-recursion
+#
+# On newer cross-compilers (like Homebrew's x86_64-elf-gcc), the default CPU
+# may enable SSE instructions, which xv6 does not set up and which cause
+# "unexpected trap 6" (invalid opcode) at runtime.  Force a plain i386 target
+# and disable SSE/MMX so the generated code matches the original xv6
+# expectations.
+CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -fvar-tracking -fvar-tracking-assignments -O0 -g -Wall -MD -gdwarf-2 -m32 -march=i386 -mno-mmx -mno-sse -mno-sse2 -Werror -fno-omit-frame-pointer -Wno-infinite-recursion
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''

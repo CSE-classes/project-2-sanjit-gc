@@ -8,6 +8,11 @@
 #include "traps.h"
 #include "spinlock.h"
 
+extern int page_allocator_type;       // CS 3320 project 2
+extern char* kalloc(void);            // CS 3320 project 2
+extern void kfree(char*);             // CS 3320 project 2
+int mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm); // CS 3320 project 2
+
 // Interrupt descriptor table (shared by all CPUs).
 struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
@@ -45,15 +50,37 @@ trap(struct trapframe *tf)
       exit();
     return;
   }
- // CS 3320 project 2
- // You might need to change the folloiwng default page fault handling
- // for your project 2
- if(tf->trapno == T_PGFLT){                 // CS 3320 project 2
-    uint faulting_va;                       // CS 3320 project 2
-    faulting_va = rcr2();                   // CS 3320 project 2
-    cprintf("Unhandled page fault for va:0x%x!\n", faulting_va);     // CS 3320 project 2
- }
 
+  // CS 3320 project 2: lazy page allocation
+  // Handle page faults differently when LAZY allocator is enabled.
+  if(tf->trapno == T_PGFLT){
+    uint faulting_va = rcr2();
+
+    if(page_allocator_type == 1 && proc != 0 &&
+       (tf->cs & 3) == DPL_USER &&
+       faulting_va <= proc->sz){
+      // Valid lazy-heap access: allocate a physical page and map it.
+      uint a = PGROUNDDOWN(faulting_va);
+      char *mem = kalloc();
+      if(mem == 0){
+        cprintf("Allocating pages failed!\n");
+        // fall through: will be treated as an unhandled fault below
+      } else {
+        memset(mem, 0, PGSIZE);
+        if(mappages(proc->pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0){
+          kfree(mem);
+          cprintf("Allocating pages failed!\n");
+        } else {
+          // Successfully handled the page fault; retry the faulting instruction.
+          return;
+        }
+      }
+    } else {
+      // Either DEFAULT allocator, kernel fault, or address beyond current brk.
+      // Do not allocate; let the original trap logic kill the process.
+      cprintf("Unhandled page fault!\n");
+    }
+  }
 
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:

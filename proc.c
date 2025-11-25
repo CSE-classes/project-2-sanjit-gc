@@ -109,18 +109,29 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
+  uint sz, newsz;
   
   sz = proc->sz;
   if(n > 0){
-    if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
-    {
-      cprintf("Allocating pages failed!\n"); // CS3320: project 2
-      return -1;
+    newsz = sz + n;
+    if(page_allocator_type == 0){
+      // DEFAULT allocator: allocate and map pages immediately (eager).
+      if((sz = allocuvm(proc->pgdir, sz, newsz)) == 0){
+        cprintf("Allocating pages failed!\n"); // CS3320: project 2
+        return -1;
+      }
+    } else {
+      // LAZY allocator: only move the program break; do not allocate pages yet.
+      // Mimic allocuvm()'s overflow / limit checks.
+      if(newsz >= KERNBASE || newsz < sz){
+        cprintf("Allocating pages failed!\n"); // CS3320: project 2
+        return -1;
+      }
+      sz = newsz;
     }
   } else if(n < 0){
-    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
-    {
+    // Shrinking: same behavior for both allocators – actually free pages.
+    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0){
       cprintf("Deallocating pages failed!\n"); // CS3320: project 2
       return -1;
     }
